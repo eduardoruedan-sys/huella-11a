@@ -1,0 +1,16 @@
+HUELLA QUE DEJAS 2.0
+
+IMPORTANTE: Esta actualización mantiene la clave config y user/<hash> para 11A en el MISMO sitio Netlify. No modifica los códigos existentes de 11A.
+
+11A alumnos: /
+11A docente: /?docente=1
+11B alumnos: /?curso=11B
+11B docente: /?docente=1&curso=11B
+ENSAYO LOCAL EN NAVEGADOR: /demo.html
+
+El ensayo es una simulación visual abreviada sin base de datos, no una prueba integral del sistema de 70 minutos.
+
+ACTUALIZAR: Sube todos los archivos del paquete al MISMO repositorio GitHub ya conectado. Sustituye archivos coincidentes, conservando la variable ADMIN_PIN en Netlify. No crees otro sitio si quieres conservar datos de 11A.
+
+Antes del despliegue haz copia del repositorio. El software no debe recibir votos reales hasta probar accesos, cierres y almacenamiento.
+No hay botón para borrar votos ni para reiniciar un curso. 11B tiene clave de configuración y rutas de usuario separadas.
