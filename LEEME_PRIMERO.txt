@@ -1,0 +1,28 @@
+LA HUELLA QUE DEJAS · 11A
+Aplicación Netlify con funciones y almacenamiento Netlify Blobs.
+
+PUBLICACIÓN (IMPORTANTE: NO ES SOLO ARRASTRAR LA CARPETA AL DROP ZONE)
+1. Descomprime este ZIP en tu computador.
+2. Entra a https://app.netlify.com y conecta el proyecto a un repositorio GitHub.
+3. Sube la carpeta completa a un repositorio nuevo (public/ + netlify/functions/ + package.json + netlify.toml).
+4. En Netlify, Build settings: Publish directory = public, Functions directory = netlify/functions.
+5. En Site configuration > Environment variables crea ADMIN_PIN con un PIN largo, único y secreto.
+6. Activa un despliegue nuevo después de crear la variable, y abre la URL https://tu-sitio.netlify.app/?docente=1
+7. Ingresa el PIN, pega la lista de estudiantes de 11A, genera y DESCARGA los códigos individuales.
+8. Distribuye los códigos por privado; abre la votación. Comparte el enlace principal, sin ?docente=1.
+9. Espera confirmaciones, cierra la votación y usa Revelar.
+
+¡ATENCIÓN!
+- NO subas el archivo de códigos al aula pública. Guárdalo en un lugar seguro.
+- No publiques el PIN ni lo incluyas en el código JavaScript.
+- Esta versión no tiene notas, ranking público, ni calificación.
+- Contiene seis etapas: 0,10,25,40,55,65 minutos; el envío se permite tras 65 minutos individuales. Reserva el resto de los 70 minutos para confirmación.
+- El conteo: 60% votos finales, 40% reconocimientos por los 5 criterios, ambos normalizados por el número de votantes.
+- Empate: gana quien tiene más votos finales, luego mayor número de reconocimientos; en un empate absoluto el sistema avisa y NO proclama a nadie. El docente debe definir un desempate con reglas públicas antes del evento.
+- Las reflexiones quedan guardadas en el servidor. No se muestran públicamente.
+- Códigos de acceso son seudónimos técnicos, no anonimato irreversible frente al administrador; la participación y los votos se almacenan asociados al código. No prometas anonimato absoluto.
+- Requiere internet y despliegue que construya y publique las Netlify Functions. Arrastrar solamente los archivos estáticos no activará el servidor.
+- Netlify Blobs es almacenamiento llave-valor, no una base de datos transaccional. Para votaciones formales o de gran escala conviene una base de datos con restricciones únicas y operaciones atómicas.
+- No ha sido probado en un despliegue real de tu cuenta; haz primero un ensayo con 2 estudiantes ficticias y luego crea un sitio nuevo para la actividad real.
+- El botón de revelación consulta cada ~7 segundos. No garantiza sincronía exacta entre pantallas.
+- Los datos de esta versión se conservan entre despliegues del mismo sitio.
