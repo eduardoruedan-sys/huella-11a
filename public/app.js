@@ -1,46 +1,106 @@
-const $=s=>document.querySelector(s), app=$('#app');
-const esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
-const group=new URLSearchParams(location.search).get('curso')==='11B'?'11B':'11A';
-const api=async data=>{data={...data,group};const r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),cache:'no-store'});const j=await r.json();if(!r.ok)throw Error(j.error||'Error de red');return j};
-let session=localStorage.getItem('huella-code-'+group)||'', profile=null, stage=0, pin='', poll=null, saving=null, lastSave='';
-const stages=[{title:'Mi propia huella',from:0,time:10},{title:'Los recuerdos que importan',from:10,time:15},{title:'Tres compañeras que recuerdo',from:25,time:15},{title:'Cinco dimensiones de la huella',from:40,time:15},{title:'La elección consciente',from:55,time:10},{title:'Una última reflexión',from:65,time:5}];
-const names=()=>profile.names.filter(n=>n!==profile.student);
-const select=(id,value,blank='Prefiero no señalar a nadie')=>`<select id="${id}"><option value="">${blank}</option>${names().map(n=>`<option value="${esc(n)}" ${n===value?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
-const answer=(key)=>esc(profile.answers?.[key]||'');
-const minutes=()=>Math.max(0,(profile.serverNow-Date.now()+Date.now()-profile.startedAt)/60000); // servidor establece inicio; reloj de referencia
-const currentMins=()=>Math.max(0,((Date.now()-(profile.clientAnchor||Date.now()))+(profile.serverNow-profile.startedAt))/60000);
-const template=(content)=>{app.innerHTML=content};
-const sendNotice=(t,err=false)=>{const n=$('#notice');if(n){n.textContent=t;n.className='notice '+(err?'error':'success')}};
-const saveDraft=async (quiet=false)=>{if(!profile||profile.submittedAt||profile.phase!=='open')return;capture();localStorage.setItem('huella-draft-'+group+'-'+session,JSON.stringify(profile.answers));try{await api({action:'save',code:session,answers:profile.answers});lastSave=new Date().toLocaleTimeString('es-CO');if(!quiet)sendNotice('Avance guardado a las '+lastSave)}catch(e){if(!quiet)sendNotice('Copia local guardada; servidor pendiente: '+e.message,true)}};
-function capture(){if(!profile)return;const a=profile.answers||(profile.answers={});for(const k of ['self','memory1','memory2','memory3','finalWhy']){const el=$('#'+k);if(el)a[k]=el.value}for(let i=0;i<3;i++){const n=$('#rec'+i),w=$('#why'+i);if(n&&w){a.recognitions ||= [];a.recognitions[i]={name:n.value,why:w.value}}}for(const k of ['solidaridad','empatia','inclusion','inspiracion','huella']){const e=$('#val-'+k);if(e){a.values ||= {};a.values[k]=e.value}}const e=$('#finalChoice');if(e)a.finalChoice=e.value;}
-const question=(num,title,subtitle,body)=>`<div class="question"><div class="tiny">REFLEXIÓN ${num}</div><h3>${title}</h3><p>${subtitle}</p>${body}</div>`;
-const ta=(id,placeholder)=>`<textarea id="${id}" maxlength="2000" placeholder="${esc(placeholder)}">${answer(id)}</textarea>`;
-function viewStudent(){if(profile.phase==='revealed')return showReveal(profile.winner);if(profile.submittedAt)return waiting('Gracias por participar. Tu voto fue registrado. Esperamos el cierre colectivo.');if(profile.phase==='closed')return waiting('La votación ya está cerrada. Esperamos la revelación.');const elapsed=currentMins();const active=Math.min(5,stages.findLastIndex(s=>elapsed>=s.from));stage=Math.min(stage,active);let content='';const a=profile.answers||{};
-if(stage===0)content=question('01','Antes de mirar a las demás, mírate a ti','¿Qué clase de compañera intentaste ser? Reconoce un acierto y algo que habrías querido hacer mejor.',ta('self','Escribe con sinceridad, sin nombres. Mínimo 25 caracteres para el envío.'))+`<div class="notice">No se está calificando tu personalidad. Este espacio es de reflexión privada.</div>`;
-if(stage===1)content=question('02','Un día que no se te olvida','Cuenta una dificultad escolar que alguien hizo más llevadera.',ta('memory1','¿Qué ocurrió? ¿Qué cambió?'))+question('03','Una acción pequeña, un recuerdo grande','Recuerda un gesto desinteresado que viste durante estos años.',ta('memory2','Describe la situación, no un adjetivo.'))+question('04','Lo que aprendimos a convivir','Cuenta qué cambió en tu forma de tratar a otras personas.',ta('memory3','¿Qué aprendiste de tus compañeras?'));
-if(stage===2)content=`<div class="notice">Reconoce hasta tres compañeras. Puedes dejar espacios sin respuesta. La calidad del recuerdo importa más que la cantidad.</div>`+[0,1,2].map(i=>question(`0${i+5}`,`Compañera ${i+1}`,'Piensa en un hecho real, no en popularidad.',select('rec'+i,a.recognitions?.[i]?.name,'Seleccionar si deseo reconocerla')+`<label>¿Qué hizo que recuerdes?</label><textarea id="why${i}" maxlength="1200">${esc(a.recognitions?.[i]?.why||'')}</textarea>`)).join('');
-if(stage===3){const qs=[['solidaridad','Solidaridad','¿Quién ayudó sin esperar algo a cambio?'],['empatia','Empatía','¿Quién comprendió o escuchó de verdad?'],['inclusion','Inclusión','¿Quién hizo sentir parte del grupo a otras?'],['inspiracion','Inspiración','¿Quién motivó con sus actos?'],['huella','Huella perdurable','¿De quién conservarás un aprendizaje humano?']];content=`<div class="notice">Cinco criterios, cinco reconocimientos posibles. Puedes abstenerte en cualquier criterio: no inventes experiencias.</div>`+qs.map(([k,t,desc],i)=>question(i+8,t,desc,select('val-'+k,a.values?.[k]))).join('')}
-if(stage===4)content=question('13','Un único nombre','Si dentro de diez años recuerdas a una compañera por la huella humana que dejó en ${group}, ¿quién sería?',select('finalChoice',a.finalChoice,'Elige una sola compañera'))+question('14','La razón que permanece','Cuenta una situación verificable o un recuerdo concreto que explique tu elección.',ta('finalWhy','No basta con «es amable» o «es mi amiga». ¿Qué hizo?'));
-if(stage===5)content=`<div class="notice">Antes de confirmar: tu voto será definitivo. No hay calificación, puntos individuales ni ranking público de estudiantes.</div>`+question('15','Una frase para despedirnos','Relee mentalmente tus recuerdos. ¿Qué te llevas de este grupo?','<p>Cuando estés lista, guarda y confirma tu elección. Puedes volver a etapas anteriores para revisar.</p>')+`<label><input type="checkbox" id="accept" style="width:auto"> Confirmo que mi elección refleja mi experiencia y que no me he elegido a mí misma.</label><button id="send" class="secondary">Confirmar participación definitiva</button>`;
-template(`<div class="card"><div class="row"><div><div class="eyebrow">${group} · EXPERIENCIA ANÓNIMA</div><h2>${esc(stages[stage].title)}</h2></div><div class="pill">${esc(profile.student)} · Etapa ${stage+1}/6</div></div><div class="progress"><span style="width:${(stage+1)/6*100}%"></span></div><div class="tiny">Ventana ${stages[stage].from}–${stages[stage].from+stages[stage].time} min · Tiempo transcurrido: <b id="timer">${Math.floor(elapsed)} min</b></div>${content}<div class="actions"><button class="ghost" id="prev" ${stage===0?'disabled':''}>← Anterior</button><button id="save">Guardar avance</button><button class="secondary" id="next" ${stage>=active||stage===5?'disabled':''}>Siguiente →</button></div><div id="notice" class="small" style="margin-top:13px">Los avances se guardan automáticamente cada 25 segundos.</div></div>`);
-$('#prev').onclick=async()=>{await saveDraft(true);stage--;viewStudent()};$('#save').onclick=()=>saveDraft();$('#next').onclick=async()=>{await saveDraft(true);stage++;viewStudent()};if($('#send'))$('#send').onclick=submit;
+import { getStore } from '@netlify/blobs';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+
+const data = () => getStore({name:'huella-11a-data',consistency:'strong'});
+const json = (d,s=200) => Response.json(d,{status:s,headers:{'Cache-Control':'no-store','Access-Control-Allow-Origin':'*'}});
+const hash = x => createHash('sha256').update(String(x)).digest('hex');
+const clean = (s,max=1600) => String(s??'').trim().slice(0,max);
+const criteria = ['solidaridad','empatia','inclusion','inspiracion','huella'];
+const defaults = {names:[],codes:[],phase:'setup',winner:null,revealAt:null,createdAt:Date.now()};
+const safeEqual = (a,b)=> {const A=Buffer.from(hash(a)), B=Buffer.from(hash(b));return timingSafeEqual(A,B)};
+const readConfig = async (store,group) => (await store.get(group==='11B'?'config-11b':'config',{type:'json'}))||defaults;
+const userKey = (id,group) => group==='11B'?`11b/user/${id}`:`user/${id}`;
+const readUsers = async (store,config,group)=>Promise.all((config.codes||[]).map(async c=>({...(await store.get(userKey(c.id,group),{type:'json'})||{}),id:c.id,name:c.name})));
+const auth = (payload, config) => {const id=hash(clean(payload.code,60).toUpperCase()); const code=(config.codes||[]).find(x=>x.id===id); return code||null;};
+const statusView = c=>({phase:c.phase,names:c.names,criteria,revealed:c.phase==='revealed',winner:c.phase==='revealed'?c.winner:null,revealAt:c.revealAt||null});
+const partial = u=>({startedAt:u?.startedAt||null,answers:u?.answers||{},submittedAt:u?.submittedAt||null});
+const validateAnswers = (a,names)=>{
+ if(!a||typeof a!=='object') return 'Respuestas inválidas';
+ for(const k of ['self','memory1','memory2','memory3','finalWhy']) if(clean(a[k],2000).length<25) return `Completa tu reflexión: ${k} (mínimo 25 caracteres)`;
+ const recognitions=Array.isArray(a.recognitions)?a.recognitions:[];
+ if(recognitions.length>3) return 'Máximo tres reconocimientos';
+ for(const r of recognitions){if(!names.includes(r.name)||clean(r.why,1000).length<20) return 'Revisa nombres y justificaciones de los reconocimientos'}
+ const values=a.values||{};
+ for(const k of criteria) if(values[k] && !names.includes(values[k])) return 'Criterio inválido';
+ if(!names.includes(a.finalChoice)) return 'Selecciona una compañera válida';
+ return null;
+};
+const summarize = users =>{
+ const done=users.filter(x=>x.submittedAt);
+ const byName={};for(const u of users) byName[u.name]={name:u.name,final:0,values:0,per:{},total:0};
+ for(const u of done){const a=u.answers||{};if(byName[a.finalChoice])byName[a.finalChoice].final++;
+ for(const k of criteria){const n=a.values?.[k];if(byName[n]){byName[n].values++;byName[n].per[k]=(byName[n].per[k]||0)+1;}}}
+ const n=done.length||1;
+ const ranked=Object.values(byName).map(o=>({...o,score:0.6*o.final/n+0.4*o.values/(5*n)})).sort((a,b)=>b.score-a.score||b.final-a.final||b.values-a.values||a.name.localeCompare(b.name,'es'));
+ const totals=Object.fromEntries(criteria.map(k=>[k,done.filter(u=>u.answers?.values?.[k]).length]));
+ return {done:done.length,roster:users.length,totals,recognized:new Set(done.flatMap(u=>[u.answers?.finalChoice,...Object.values(u.answers?.values||{})].filter(Boolean))).size,ranked};
+};
+export default async function(req){
+ try{
+  if(req.method!=='POST')return json({error:'Usa POST'},405);
+  let b;try{b=await req.json()}catch{return json({error:'JSON inválido'},400)}
+  if(JSON.stringify(b).length>30000)return json({error:'Solicitud demasiado grande'},413);
+  const group=b.group==='11B'?'11B':'11A'; const configKey=group==='11B'?'config-11b':'config'; const store=data(), c=await readConfig(store,group), action=clean(b.action,40);
+  const admin=safeEqual(clean(b.pin,150),process.env.ADMIN_PIN||randomBytes(24).toString('hex'));
+  if(action==='status')return json(statusView(c));
+  if(action==='login'){
+   if(c.phase==='setup')return json({error:'La actividad aún no está preparada'},403);
+   const entry=auth(b,c);if(!entry)return json({error:'Código de acceso incorrecto'},403);
+   let u=await store.get(userKey(entry.id,group),{type:'json'});
+   if(!u){u={startedAt:Date.now(),answers:{},submittedAt:null};await store.setJSON(userKey(entry.id,group),u)}
+   return json({...statusView(c),...partial(u),student:entry.name,serverNow:Date.now()});
+  }
+  if(['save','submit','me'].includes(action)){
+   const entry=auth(b,c);if(!entry)return json({error:'Código de acceso incorrecto'},403);
+   const u=await store.get(userKey(entry.id,group),{type:'json'});if(!u)return json({error:'Primero ingresa con tu código'},403);
+   if(action==='me')return json({...partial(u),...statusView(c),student:entry.name,serverNow:Date.now()});
+   if(c.phase!=='open')return json({error:'La votación está cerrada'},403);
+   if(u.submittedAt)return json({error:'Tu participación ya fue enviada'},409);
+   if(!b.answers||typeof b.answers!=='object')return json({error:'Formato de respuestas inválido'},400);
+   const a=structuredClone(b.answers);
+   for(const key of ['self','memory1','memory2','memory3','finalWhy'])a[key]=clean(a[key],2000);
+   a.recognitions=(Array.isArray(a.recognitions)?a.recognitions:[]).slice(0,3).map(r=>({name:clean(r.name,100),why:clean(r.why,1200)}));
+   a.values=Object.fromEntries(criteria.map(k=>[k,clean(a.values?.[k],100)]));
+   a.finalChoice=clean(a.finalChoice,100);
+   const names=c.names.filter(n=>n!==entry.name);
+   for(const r of a.recognitions)if(r.name&&!names.includes(r.name))return json({error:'No puedes reconocerte a ti misma'},400);
+   for(const k of criteria)if(a.values[k]&&!names.includes(a.values[k]))return json({error:'No puedes votarte a ti misma'},400);
+   if(a.finalChoice&&!names.includes(a.finalChoice))return json({error:'Elección final inválida'},400);
+   if(action==='submit'){
+    // Sin espera mínima; se mantiene validación completa de respuestas antes de enviar.
+    const err=validateAnswers(a,names);if(err)return json({error:err},400);
+    u.submittedAt=Date.now();
+   }
+   u.answers=a;u.updatedAt=Date.now();await store.setJSON(userKey(entry.id,group),u);return json({ok:true,submittedAt:u.submittedAt,savedAt:u.updatedAt});
+  }
+  if(!admin)return json({error:'PIN docente incorrecto o variable ADMIN_PIN no configurada'},403);
+  if(action==='admin'){
+   const users=await readUsers(store,c,group);const sums=summarize(users);
+   return json({...statusView(c),summary:{...sums,ranked:c.phase==='revealed'?sums.ranked:[]},participation:users.map(u=>({name:u.name,started:!!u.startedAt,done:!!u.submittedAt})),ready:!!process.env.ADMIN_PIN});
+  }
+  if(action==='setup'){
+   if(c.phase!=='setup')return json({error:'La lista ya fue confirmada. No se puede modificar tras iniciar.'},409);
+   const names=[...new Set(String(b.names||'').split(/\r?\n/).map(v=>clean(v,100)).filter(Boolean))];
+   if(names.length<2||names.length>80)return json({error:'Escribe entre 2 y 80 estudiantes (una por línea)'},400);
+   const codes=names.map(name=>{const code=randomBytes(5).toString('hex').toUpperCase();return {name,code,id:hash(code)}});
+   await store.setJSON(configKey,{...c,names,codes:codes.map(({name,id})=>({name,id})),phase:'ready'});
+   return json({ok:true,codes:codes.map(({name,code})=>({name,code}))});
+  }
+  if(action==='open'){
+   if(c.phase!=='ready')return json({error:'La actividad ya fue iniciada o no está configurada'},409);
+   c.phase='open';await store.setJSON(configKey,c);return json({ok:true});
+  }
+  if(action==='close'){
+   if(c.phase!=='open')return json({error:'La votación no está abierta'},409);
+   c.phase='closed';await store.setJSON(configKey,c);return json({ok:true});
+  }
+  if(action==='reveal'){
+   if(c.phase!=='closed')return json({error:'Primero cierra la votación'},409);
+   const sums=summarize(await readUsers(store,c,group));if(!sums.done)return json({error:'No hay votos completos'},409);
+   const [first,second]=sums.ranked;
+   if(second&&Math.abs(first.score-second.score)<1e-10&&first.final===second.final&&first.values===second.values)return json({error:'Empate total. No se puede garantizar una ganadora única; se necesita desempate adicional'},409);
+   c.winner=first.name;c.phase='revealed';c.revealAt=Date.now();await store.setJSON(configKey,c);return json({ok:true,winner:c.winner,summary:sums});
+  }
+  return json({error:'Acción no reconocida'},400);
+ }catch(err){console.error(err);return json({error:'Error del servidor. Verifica el despliegue y Netlify Blobs.'},500)}
 }
-async function submit(){if(!$('#accept').checked)return sendNotice('Primero confirma tu decisión.',true);capture();const a=profile.answers||{};const fields=['self','memory1','memory2','memory3','finalWhy'];if(fields.some(k=>(a[k]||'').trim().length<25))return sendNotice('Faltan reflexiones de mínimo 25 caracteres. Usa Anterior para completarlas.',true);for(const r of a.recognitions||[])if(r.name&&(r.why||'').trim().length<20)return sendNotice('Toda compañera reconocida debe tener una justificación de 20 caracteres.',true);if(!a.finalChoice)return sendNotice('Debes escoger el nombre final.',true);if(!confirm('¿Confirmas tu voto definitivo? No podrás editarlo.'))return;try{const x=await api({action:'submit',code:session,answers:a});profile.submittedAt=x.submittedAt;waiting('Tu participación fue enviada. Esperamos juntas la revelación.')}catch(e){sendNotice(e.message,true)}}
-function waiting(msg){template(`<div class="card hero"><div class="eyebrow">${group} · TU HUELLA CUENTA</div><h1>Gracias por dejar un recuerdo.</h1><p>${esc(msg)}</p><p class="muted">El docente revelará al final un único nombre. No cierres la página si quieres verlo aquí.</p><div class="progress"><span style="width:100%"></span></div><div class="small">Esperando actualización del evento…</div></div>`)}
-function showReveal(name){template(`<section class="reveal"><div class="eyebrow">✦ RECONOCIMIENTO · PROMOCIÓN 2026 ✦</div><p>POR LA HUELLA QUE DEJÓ EN SUS COMPAÑERAS DE ${group}</p><h1>${esc(name||'')}</h1><p>Los mejores recuerdos no ocupan un lugar en una tabla. Permanecen en las personas.</p></section>`);}
-async function join(){session=($('#code')?.value||session).trim().toUpperCase();if(!session)return alert('Escribe tu código');try{profile=await api({action:'login',code:session});profile.clientAnchor=Date.now();profile.answers ||= {};const local=localStorage.getItem('huella-draft-'+group+'-'+session);if(local&&!profile.submittedAt){try{const d=JSON.parse(local);if(Object.keys(profile.answers).length===0)profile.answers=d}catch{}}localStorage.setItem('huella-code-'+group,session);stage=0;viewStudent();startPoll();}catch(e){alert(e.message)}}
-function startPoll(){if(poll)clearInterval(poll);poll=setInterval(async()=>{try{const x=await api({action:'me',code:session});const phaseChanged=profile.phase!==x.phase||profile.submittedAt!==x.submittedAt;profile.phase=x.phase;profile.winner=x.winner;profile.submittedAt=x.submittedAt;if(phaseChanged)viewStudent();else if(!profile.submittedAt&&profile.phase==='open'){$('#timer')&&($('#timer').textContent=Math.floor(currentMins())+' min');const active=stages.findLastIndex(s=>currentMins()>=s.from);if(active>stage){const btn=$('#next');if(btn)btn.disabled=false;}}}catch{}},7000);if(saving)clearInterval(saving);saving=setInterval(()=>{if(profile&&!profile.submittedAt&&profile.phase==='open')saveDraft(true)},25000)}
-function barGraphs(totals){const labels={solidaridad:'Solidaridad',empatia:'Empatía',inclusion:'Inclusión',inspiracion:'Inspiración',huella:'Huella perdurable'};const max=Math.max(1,...Object.values(totals||{}));return Object.entries(labels).map(([k,l])=>`<div class="barrow"><span>${l}</span><div class="bar"><i style="width:${(totals?.[k]||0)/max*100}%"></i></div><b>${totals?.[k]||0}</b></div>`).join('')}
-async function adminApi(action,extras={}){return api({action,pin,...extras})}
-async function adminView(){try{const d=await adminApi('admin');const s=d.summary||{},phase=d.phase;let controls='';if(phase==='setup')controls=`<h3>Lista de ${group}</h3><p>Escribe el nombre de cada estudiante en una línea. Comprueba la lista antes de confirmarla: luego no se puede cambiar.</p><textarea id="names" rows="12" placeholder="María Apellido\nLaura Apellido"></textarea><button id="setup">Generar códigos únicos</button>`;
-if(phase==='ready')controls=`<div class="notice">Códigos generados. Distribúyelos de manera privada. Cuando todos estén listos, abre la actividad.</div><button id="open">Abrir votación</button>`;
-if(phase==='open')controls=`<button id="close" class="danger">Cerrar recepción de votos</button><div class="small">No cierres hasta que todas las estudiantes listas hayan confirmado.</div>`;
-if(phase==='closed')controls=`<button id="reveal">Revelar la única ganadora</button><div class="notice">Al revelar, aparecerá el nombre en las pantallas estudiantiles conectadas. En empate absoluto no se revela automáticamente.</div>`;
-if(phase==='revealed')controls=`<button id="big">Mostrar nombre a pantalla completa</button><p>Ganadora: <strong>${esc(d.winner)}</strong></p>`;
-template(`<div class="card"><div class="row"><div><div class="eyebrow">PANEL DOCENTE · USO RESTRINGIDO</div><h1>La huella que dejas · ${group}</h1></div><span class="pill">${esc(phase.toUpperCase())}</span></div><div class="notice">Curso activo: <b>${group}</b> · <a href="/?docente=1" class="footlink">Administrar 11A</a> · <a href="/?docente=1&curso=11B" class="footlink">Administrar 11B</a> · <a href="/demo.html" class="footlink">Modo ensayo sin votos</a></div><div class="row"><div class="stat"><strong>${s.roster||0}</strong><span>Estudiantes</span></div><div class="stat"><strong>${s.done||0}</strong><span>Votos confirmados</span></div><div class="stat"><strong>${s.recognized||0}</strong><span>Compañeras reconocidas</span></div></div><h2>Radiografía de valores</h2><p>Gráficas colectivas, sin nombres ni posiciones antes de la revelación.</p>${barGraphs(s.totals)}<hr style="border-color:#344962;margin:28px 0">${controls}<div class="notice" id="notice">Los datos se actualizan con el botón «Actualizar panel».</div><div class="actions"><button class="secondary" id="refresh">Actualizar panel</button><button class="ghost" id="logout">Salir del panel</button></div>${phase!=='setup'?`<h3>Participación</h3><div class="studentlist">${(d.participation||[]).map(p=>`<div>${esc(p.name)} <span class="${p.done?'success':'muted'}">${p.done?'✓ Enviada':p.started?'En curso':'No inició'}</span></div>`).join('')}</div>`:''}</div>`);
-$('#refresh').onclick=adminView;$('#logout').onclick=()=>location.href='/';if($('#setup'))$('#setup').onclick=async()=>{if(!confirm('¿Lista definitiva de estudiantes?'))return;try{const x=await adminApi('setup',{names:$('#names').value});const txt=x.codes.map(c=>`${c.name}  |  ${c.code}`).join('\n');download('CODIGOS_PRIVADOS_'+group+'.txt',txt);alert('Códigos generados. Se descargó un archivo PRIVADO. No lo publiques.');adminView()}catch(e){sendNotice(e.message,true)}};
-for(const a of ['open','close','reveal'])if($('#'+a))$('#'+a).onclick=async()=>{if(!confirm('¿Confirmar acción: '+a+'?'))return;try{await adminApi(a);adminView()}catch(e){sendNotice(e.message,true)}};
-if($('#big'))$('#big').onclick=()=>showReveal(d.winner);
-}catch(e){template(`<div class="card hero"><h2>Acceso docente</h2><p>Introduce el PIN de administrador configurado en Netlify.</p><input id="pin" type="password" placeholder="PIN del docente"><div class="actions"><button id="enter">Ingresar</button><a class="footlink" href="/">Volver</a></div><p id="notice" class="small">${esc(e.message)}</p></div>`);$('#enter').onclick=()=>{pin=$('#pin').value;adminView()}}}
-function download(filename,content){const u=URL.createObjectURL(new Blob([content],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000)}
-if(location.search.includes('docente=1'))adminView();else{$('#join').onclick=join;$('#code').onkeydown=e=>{if(e.key==='Enter')join()};}
